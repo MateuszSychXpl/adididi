@@ -42,12 +42,63 @@
     { key: 'NET-3',  emoji: '🛰️', title: 'Timeout API',       bonus: 30, ttl: 5.0, sla: 35 },
   ];
 
+  // ---- Boss: PM Wojtek (Project Manager) ----
+  const PM_PHRASES = [
+    'To tylko mały feature!',
+    'Klient czeka — na wczoraj!',
+    'Dorzućmy jeszcze AI 🤖',
+    'Deadline był wczoraj!',
+    'Da się do jutra?',
+    'Quick win, serio!',
+    'Scope się nie zmienił 😇',
+    'Jeszcze jedna drobnostka...',
+    'Sprint? Jaki sprint?',
+    'Zróbcie po prostu magię ✨',
+    'Klient widział to u konkurencji',
+    'To miało być na demo!',
+  ];
+  const PM_TASKS = [
+    { t: 'ASAP!!!',        cost: 50 },
+    { t: 'Quick win',      cost: 30 },
+    { t: 'Mały feature',   cost: 45 },
+    { t: 'Na wczoraj?',    cost: 40 },
+    { t: 'Refactor all',   cost: 60 },
+    { t: 'Dorzuć AI',      cost: 55 },
+    { t: 'Klient prosił',  cost: 35 },
+    { t: 'Scope creep',    cost: 50 },
+    { t: 'Tylko 1 zmiana', cost: 30 },
+    { t: 'Hotfix PROD',    cost: 45 },
+  ];
+
+  // ---- Pomocnicy Adididi (wingmani) ----
+  //  Mateusz: pasjonat vibecodingu/AI -> strzały samonaprowadzające (AI celuje za Ciebie)
+  //  Irek: spec od GH Actions / pipeline'ow / repo -> potrojny "deploy" CI/CD
+  const HELPERS = [
+    { name: 'Mateusz', emoji: '🧔',   color: '#7cf0a0', intro: 'Mateusz odpala AI copilota! 🤖✨', mode: 'ai' },
+    { name: 'Irek',    emoji: '🧑‍🦰', color: '#ffd36b', intro: 'Irek pushuje pipeline! 🚀 CI/CD',  mode: 'ci' },
+  ];
+
   // =========================================================================
   //  AUDIO — proste blipy z WebAudio (z wyciszeniem)
   // =========================================================================
   const Audio2 = {
     ctx: null,
     muted: false,
+    bgm: null,
+    startMusic() {
+      if (!this.bgm) {
+        this.bgm = new Audio('music.mp3');
+        this.bgm.loop = true;
+        this.bgm.volume = 0.35;
+      }
+      this.bgm.muted = this.muted;
+      const p = this.bgm.play();
+      if (p && p.catch) p.catch(() => {}); // autoplay bywa blokowany do gestu — ignorujemy
+    },
+    setMuted(m) {
+      this.muted = m;
+      if (this.bgm) this.bgm.muted = m;
+    },
     init() {
       if (!this.ctx) {
         const AC = window.AudioContext || window.webkitAudioContext;
@@ -81,9 +132,10 @@
   //  STAN GRY
   // =========================================================================
   let state = 'start'; // 'start' | 'playing' | 'over'
-  let bullets, enemies, powerups, particles, tickets, floaters;
+  let bullets, enemies, powerups, particles, tickets, floaters, tasks, helpers;
   let player, savings, bill, wave, elapsed, spawnTimer, ticketTimer;
   let fireCooldown, rapidUntil, lastTs;
+  let boss, bossCooldown, bossDefeated, helperTimer;
 
   function reset() {
     bullets = [];
@@ -92,6 +144,12 @@
     particles = [];
     tickets = [];
     floaters = []; // teksty "+$" itp.
+    tasks = [];    // taski/ficzery rzucane przez PM Wojtka
+    helpers = [];  // Mateusz / Irek
+    boss = null;
+    bossCooldown = 22;  // pierwszy PM Wojtek po ~22 s
+    bossDefeated = 0;
+    helperTimer = 13;   // pierwszy pomocnik po ~13 s
     player = { x: W / 2, y: GROUND_Y - 4, w: 46, h: 46, speed: 460, dir: 0 };
     savings = 0;
     bill = 0;
@@ -249,10 +307,13 @@
     if (id === 'bomb') {
       let total = 0;
       for (const e of enemies) total += e.type.cost;
+      for (const t of tasks) total += t.cost;
       savings += total;
       spawnParticles(W / 2, H / 2, '#f1c40f', 50);
       for (const e of enemies) spawnParticles(e.x, e.y, '#2ecc71', 6);
+      for (const t of tasks) spawnParticles(t.x, t.y, '#2ecc71', 5);
       enemies = [];
+      tasks = [];
       addFloater(player.x, player.y - 50, `FinOps audit! +$${total}`, '#f1c40f');
       Audio2.boom();
     } else if (id === 'rapid') {
@@ -288,6 +349,55 @@
   }
 
   // =========================================================================
+  //  BOSS: PM WOJTEK  +  POMOCNICY (Mateusz / Irek)
+  // =========================================================================
+  function spawnBoss() {
+    const hp = 28 + bossDefeated * 16;
+    boss = {
+      x: W / 2, y: 92, vx: 95 + bossDefeated * 12, w: 84, h: 56,
+      hp, maxHp: hp, taskTimer: 1.0, hitFlash: 0, born: 0,
+      speech: PM_PHRASES[(Math.random() * PM_PHRASES.length) | 0], speechTimer: 3,
+    };
+    addFloater(W / 2, 160, '🧑‍💼 PM WOJTEK WCHODZI NA STANDUP!', '#f1c40f');
+    Audio2.bad();
+  }
+
+  function throwTask() {
+    const def = PM_TASKS[(Math.random() * PM_TASKS.length) | 0];
+    tasks.push({
+      label: def.t, cost: def.cost,
+      x: boss.x + (Math.random() - 0.5) * 60, y: boss.y + 28,
+      vx: (Math.random() - 0.5) * 120,
+      vy: 70 + Math.random() * 60 + bossDefeated * 12,
+      born: 0,
+    });
+    Audio2.blip(240, 0.05, 'sawtooth', 0.04);
+  }
+
+  function spawnHelper() {
+    const def = HELPERS[(Math.random() * HELPERS.length) | 0];
+    const side = Math.random() < 0.5 ? -1 : 1;
+    helpers.push({
+      def, side, x: side < 0 ? -40 : W + 40, y: player.y - 4,
+      offset: 58 + Math.random() * 28, life: 6.5, fireCd: 0.3,
+    });
+    addFloater(player.x, player.y - 64, def.intro, def.color);
+    Audio2.power();
+  }
+
+  function nearestTarget(x, y) {
+    let best = null, bestD = Infinity;
+    const consider = (tx, ty) => {
+      const d = (tx - x) * (tx - x) + (ty - y) * (ty - y);
+      if (d < bestD) { bestD = d; best = { x: tx, y: ty }; }
+    };
+    for (const e of enemies) consider(e.x, e.y);
+    for (const t of tasks) consider(t.x, t.y);
+    if (boss) consider(boss.x, boss.y);
+    return best;
+  }
+
+  // =========================================================================
   //  UPDATE
   // =========================================================================
   function update(dt) {
@@ -319,8 +429,20 @@
     // --- pociski ---
     for (let i = bullets.length - 1; i >= 0; i--) {
       const b = bullets[i];
+      if (b.homing) {
+        // AI copilot Mateusza: zakręca w stronę najbliższego celu
+        const tgt = nearestTarget(b.x, b.y);
+        if (tgt) {
+          const dx = tgt.x - b.x, dy = tgt.y - b.y;
+          const len = Math.hypot(dx, dy) || 1;
+          const sp = 600;
+          b.vx = (b.vx || 0) + (dx / len * sp - (b.vx || 0)) * Math.min(1, dt * 6);
+          b.vy = b.vy + (dy / len * sp - b.vy) * Math.min(1, dt * 6);
+        }
+      }
+      b.x += (b.vx || 0) * dt;
       b.y += b.vy * dt;
-      if (b.y < -10) bullets.splice(i, 1);
+      if (b.y < -10 || b.y > H + 10 || b.x < -20 || b.x > W + 20) bullets.splice(i, 1);
     }
 
     // --- spawnowanie wrogów ---
@@ -328,8 +450,8 @@
     const spawnEvery = Math.max(0.42, 1.15 - wave * 0.07);
     if (spawnTimer <= 0) {
       spawnEnemy();
-      if (wave > 4 && Math.random() < 0.3) spawnEnemy();
-      spawnTimer = spawnEvery * (0.7 + Math.random() * 0.6);
+      if (wave > 4 && !boss && Math.random() < 0.3) spawnEnemy();
+      spawnTimer = spawnEvery * (0.7 + Math.random() * 0.6) * (boss ? 1.8 : 1);
     }
 
     // --- tickety Jira ---
@@ -389,6 +511,114 @@
           break;
         }
       }
+    }
+
+    // --- BOSS: PM Wojtek ---
+    if (!boss) {
+      bossCooldown -= dt;
+      if (bossCooldown <= 0) spawnBoss();
+    } else {
+      boss.born += dt;
+      boss.x += boss.vx * dt;
+      if (boss.x < boss.w / 2 || boss.x > W - boss.w / 2) boss.vx *= -1;
+      boss.x = Math.max(boss.w / 2, Math.min(W - boss.w / 2, boss.x));
+      if (boss.hitFlash > 0) boss.hitFlash -= dt;
+
+      boss.speechTimer -= dt;
+      if (boss.speechTimer <= 0) {
+        boss.speech = PM_PHRASES[(Math.random() * PM_PHRASES.length) | 0];
+        boss.speechTimer = 2.4 + Math.random() * 1.8;
+      }
+
+      boss.taskTimer -= dt;
+      if (boss.taskTimer <= 0) {
+        throwTask();
+        boss.taskTimer = Math.max(0.55, 1.4 - bossDefeated * 0.15) * (0.7 + Math.random() * 0.6);
+      }
+
+      // pociski vs PM Wojtek
+      for (let j = bullets.length - 1; j >= 0; j--) {
+        const b = bullets[j];
+        if (Math.abs(b.x - boss.x) < boss.w / 2 && Math.abs(b.y - boss.y) < boss.h / 2) {
+          bullets.splice(j, 1);
+          boss.hp -= 1;
+          boss.hitFlash = 0.08;
+          spawnParticles(b.x, b.y, '#ffd36b', 5);
+          Audio2.blip(300, 0.04, 'square', 0.04);
+          if (boss.hp <= 0) {
+            const reward = 250 + bossDefeated * 150;
+            savings += reward;
+            spawnParticles(boss.x, boss.y, '#2ecc71', 60);
+            addFloater(boss.x, boss.y, `SPRINT ZAMKNIĘTY! +$${reward}`, '#2ecc71');
+            Audio2.win();
+            boss = null;
+            bossDefeated += 1;
+            bossCooldown = Math.max(16, 30 - bossDefeated * 2);
+            break;
+          }
+        }
+      }
+    }
+
+    // --- taski/ficzery od PM-a (spadają jak koszty) ---
+    for (let i = tasks.length - 1; i >= 0; i--) {
+      const t = tasks[i];
+      t.x += t.vx * dt;
+      t.y += t.vy * dt;
+      t.born += dt;
+      if (t.x < 30 || t.x > W - 30) t.vx *= -1;
+      if (t.y >= GROUND_Y) {
+        // niezrobiony task = scope creep na rachunku
+        Audio2.boom();
+        spawnParticles(t.x, GROUND_Y, '#e74c3c', 12);
+        tasks.splice(i, 1);
+        addToBill(t.cost, t.x, GROUND_Y - 18);
+        continue;
+      }
+      for (let j = bullets.length - 1; j >= 0; j--) {
+        const b = bullets[j];
+        if (Math.abs(b.x - t.x) < 44 && Math.abs(b.y - t.y) < 18) {
+          bullets.splice(j, 1);
+          savings += t.cost;
+          spawnParticles(t.x, t.y, '#2ecc71', 12);
+          addFloater(t.x, t.y, `DONE ✅ +$${t.cost}`, '#2ecc71');
+          Audio2.hit();
+          tasks.splice(i, 1);
+          break;
+        }
+      }
+    }
+
+    // --- pomocnicy: Mateusz (AI) i Irek (CI/CD) ---
+    if (!helpers.length) {
+      helperTimer -= dt;
+      if (helperTimer <= 0) {
+        spawnHelper();
+        helperTimer = 15 + Math.random() * 10;
+      }
+    }
+    for (let i = helpers.length - 1; i >= 0; i--) {
+      const h = helpers[i];
+      h.life -= dt;
+      const targetX = player.x + h.side * h.offset;
+      h.x += (targetX - h.x) * Math.min(1, dt * 4);
+      h.y += (player.y - 4 - h.y) * Math.min(1, dt * 4);
+      h.fireCd -= dt;
+      const onScreen = h.x > 0 && h.x < W;
+      if (h.fireCd <= 0 && onScreen) {
+        if (h.def.mode === 'ai') {
+          // AI copilot: pojedynczy strzał samonaprowadzający
+          bullets.push({ x: h.x, y: h.y - 20, vx: 0, vy: -560, r: 5, homing: true });
+        } else {
+          // pipeline CI/CD: potrójny "deploy"
+          bullets.push({ x: h.x, y: h.y - 20, vx: 0, vy: -560, r: 4 });
+          bullets.push({ x: h.x - 12, y: h.y - 14, vx: -90, vy: -540, r: 3 });
+          bullets.push({ x: h.x + 12, y: h.y - 14, vx: 90, vy: -540, r: 3 });
+        }
+        h.fireCd = 0.28;
+        Audio2.blip(760, 0.03, 'square', 0.02);
+      }
+      if (h.life <= 0) helpers.splice(i, 1);
     }
 
     // --- power-upy (zbierane przez gracza) ---
@@ -485,20 +715,30 @@
       ctx.fillText(`$${e.type.cost}`, e.x, e.y + e.type.r + 9 + bob);
     }
 
+    // taski PM-a + boss
+    for (const t of tasks) drawTask(t);
+    if (boss) drawBoss();
+
     // pociski
     for (const b of bullets) {
       ctx.save();
-      ctx.shadowColor = '#9fe0ff';
-      ctx.shadowBlur = 10;
-      ctx.fillStyle = '#cdeeff';
+      ctx.shadowColor = b.homing ? '#7cf0a0' : '#9fe0ff';
+      ctx.shadowBlur = b.homing ? 14 : 10;
+      ctx.fillStyle = b.homing ? '#d4ffe2' : '#cdeeff';
       ctx.beginPath();
-      ctx.ellipse(b.x, b.y, b.r, b.r * 1.8, 0, 0, Math.PI * 2);
+      const ang = Math.atan2(b.vy, b.vx || 0) + Math.PI / 2;
+      ctx.translate(b.x, b.y);
+      ctx.rotate(b.homing ? ang : 0);
+      ctx.ellipse(0, 0, b.r, b.r * 1.8, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
 
     // gracz — Adididi
     drawPlayer();
+
+    // pomocnicy: Mateusz / Irek
+    for (const h of helpers) drawHelper(h);
 
     // tickety Jira
     for (const tk of tickets) drawTicket(tk);
@@ -534,6 +774,80 @@
     ctx.font = 'bold 11px Consolas, monospace';
     ctx.fillStyle = '#9fe0ff';
     ctx.fillText('ADIDIDI', x, y + 20);
+  }
+
+  function drawHelper(h) {
+    ctx.save();
+    ctx.shadowColor = h.def.color;
+    ctx.shadowBlur = 14;
+    ctx.font = '30px serif';
+    ctx.fillText(h.def.emoji, h.x, h.y - 4);
+    ctx.restore();
+    ctx.font = 'bold 10px Consolas, monospace';
+    ctx.fillStyle = h.def.color;
+    ctx.fillText(h.def.name.toUpperCase(), h.x, h.y + 16);
+  }
+
+  function drawTask(t) {
+    const w = 88, h = 30;
+    const pop = Math.min(1, t.born / 0.15);
+    const s = 0.8 + pop * 0.2;
+    ctx.save();
+    ctx.translate(t.x, t.y);
+    ctx.scale(s, s);
+    ctx.translate(-w / 2, -h / 2);
+    ctx.fillStyle = 'rgba(72,28,28,0.95)';
+    roundRect(0, 0, w, h, 6); ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = '#e67e22'; ctx.stroke();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = 'bold 11px Segoe UI, sans-serif';
+    ctx.fillStyle = '#ffe0c0';
+    ctx.fillText(t.label, w / 2, h / 2 - 4);
+    ctx.font = 'bold 9px Consolas, monospace';
+    ctx.fillStyle = '#ffd36b';
+    ctx.fillText(`$${t.cost}`, w / 2, h / 2 + 8);
+    ctx.restore();
+    ctx.textAlign = 'center';
+  }
+
+  function drawBoss() {
+    const b = boss;
+    const bob = Math.sin(b.born * 3) * 4;
+
+    // dymek z tekstem PM-a
+    if (b.speech) {
+      ctx.font = 'bold 12px Segoe UI, sans-serif';
+      const tw = ctx.measureText(b.speech).width + 22;
+      const bx = Math.max(8, Math.min(W - tw - 8, b.x - tw / 2));
+      const by = b.y - 52 + bob;
+      ctx.fillStyle = 'rgba(255,255,255,0.93)';
+      roundRect(bx, by, tw, 24, 8); ctx.fill();
+      ctx.fillStyle = '#102a44';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(b.speech, bx + tw / 2, by + 12);
+    }
+
+    // pasek "cierpliwości" (HP)
+    const bw = 160, bh = 9, hx = b.x - bw / 2, hy = b.y - 30 + bob;
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    roundRect(hx, hy, bw, bh, 4); ctx.fill();
+    const ratio = Math.max(0, b.hp / b.maxHp);
+    ctx.fillStyle = ratio > 0.5 ? '#e74c3c' : (ratio > 0.25 ? '#f39c12' : '#f1c40f');
+    roundRect(hx, hy, bw * ratio, bh, 4); ctx.fill();
+
+    // postać PM-a
+    ctx.save();
+    if (b.hitFlash > 0) ctx.globalAlpha = 0.55;
+    ctx.shadowColor = '#e74c3c';
+    ctx.shadowBlur = 20;
+    ctx.font = '52px serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('🧑‍💼', b.x, b.y + bob);
+    ctx.restore();
+
+    ctx.font = 'bold 12px Consolas, monospace';
+    ctx.fillStyle = '#ffd36b';
+    ctx.fillText('PM WOJTEK', b.x, b.y + 32 + bob);
   }
 
   function drawTicket(tk) {
@@ -632,6 +946,7 @@
 
   function startGame() {
     Audio2.init();
+    Audio2.startMusic();
     reset();
     scrStart.classList.add('hidden');
     scrOver.classList.add('hidden');
@@ -664,10 +979,11 @@
   // mute
   const muteBtn = document.getElementById('mute-btn');
   muteBtn.addEventListener('click', () => {
-    Audio2.muted = !Audio2.muted;
+    Audio2.setMuted(!Audio2.muted);
     muteBtn.textContent = Audio2.muted ? '🔇' : '🔊';
   });
 
-  // pierwszy render tła pod ekranem startowym
+  // pierwszy render tła pod ekranem startowym (reset inicjalizuje tablice/gracza)
+  reset();
   draw();
 })();
