@@ -36,7 +36,14 @@ const server = http.createServer((req, res) => {
       return;
     }
     const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+    // HTML/JS/CSS — bez długiego cache, żeby akcelerator (np. Cytrus/wykr.es)
+    // rewalidował po deployu i nie serwował starej wersji gry.
+    // Media (mp3/grafiki) — można cache'ować na dłużej.
+    const noCache = ['.html', '.js', '.css', '.json'].includes(ext);
+    res.writeHead(200, {
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      'Cache-Control': noCache ? 'no-cache, must-revalidate' : 'public, max-age=86400',
+    });
     res.end(data);
   });
 });
