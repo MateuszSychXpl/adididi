@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Adididi vs Koszty Azure ☁️💸</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦸</text></svg>" />
+</head>
+<body>
+  <div id="game-wrap">
+    <!-- HUD -->
+    <header id="hud">
+      <div class="hud-item">
+        <span class="hud-label">💰 Zaoszczędzone</span>
+        <span id="savings" class="hud-value">$0</span>
+      </div>
+      <div class="hud-item hud-bill">
+        <span class="hud-label">🧾 Rachunek miesięczny</span>
+        <div class="bill-bar">
+          <div id="bill-fill"></div>
+          <span id="bill-text">$0 / $1000</span>
+        </div>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">📈 Fala</span>
+        <span id="wave" class="hud-value">1</span>
+      </div>
+      <button id="mute-btn" title="Dźwięk">🔊</button>
+    </header>
+
+    <!-- Plansza -->
+    <canvas id="game" width="800" height="560"></canvas>
+
+    <!-- Ekran startowy -->
+    <div id="screen-start" class="overlay">
+      <h1>🦸 Adididi <span>vs</span> ☁️ Koszty Azure</h1>
+      <p class="tagline">DevOps musi okiełznać chmurę, zanim CFO dostanie zawału.</p>
+      <div class="how">
+        <p><strong>Cel:</strong> rozstrzeliwuj spadające koszty Azure <em>skryptami optymalizacji</em>.
+           Każdy zestrzelony koszt = oszczędność. Koszt, który dotrze na dół, ląduje na rachunku.</p>
+        <p><strong>Przegrywasz</strong>, gdy rachunek przekroczy budżet. 💀</p>
+        <ul class="controls">
+          <li><kbd>←</kbd> <kbd>→</kbd> lub <kbd>A</kbd> <kbd>D</kbd> / mysz — ruch</li>
+          <li><kbd>Spacja</kbd> lub klik — strzał</li>
+        </ul>
+      </div>
+      <button id="btn-start" class="btn">▶ START</button>
+    </div>
+
+    <!-- Ekran końca gry -->
+    <div id="screen-over" class="overlay hidden">
+      <h1 id="over-title">💀 Zwolniony!</h1>
+      <p id="over-reason">Rachunek za Azure wysadził budżet w powietrze.</p>
+      <div class="stats">
+        <div><span class="big" id="final-savings">$0</span><small>zaoszczędzone</small></div>
+        <div><span class="big" id="final-wave">1</span><small>fala</small></div>
+      </div>
+      <p id="rank" class="rank"></p>
+      <button id="btn-restart" class="btn">↺ Jeszcze raz</button>
+    </div>
+  </div>
+
+  <p class="footer">Made for fun • Node.js + Canvas • <span>FinOps approved™</span></p>
+
+  <script src="game.js"></script>
+</body>
+</html>
